@@ -24,6 +24,8 @@ package org.jboss.as.domain.http.server.security;
 import io.undertow.security.api.AuthenticationMechanism;
 import io.undertow.security.api.SecurityContext;
 import io.undertow.server.HttpServerExchange;
+import io.undertow.util.Headers;
+import io.undertow.util.Methods;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -53,7 +55,9 @@ public class AuthenticationMechanismWrapper implements AuthenticationMechanism {
                 inetAddress = ((InetSocketAddress)address).getAddress();
             }
             RealmIdentityManager.setRequestSpecific(mechanism, inetAddress);
-
+            if (isPreflightedOptions(exchange)) {
+                return AuthenticationMechanismOutcome.AUTHENTICATED;
+            }
             return wrapped.authenticate(exchange, securityContext);
         } finally {
             RealmIdentityManager.clearRequestSpecific();
@@ -63,6 +67,10 @@ public class AuthenticationMechanismWrapper implements AuthenticationMechanism {
     @Override
     public ChallengeResult sendChallenge(HttpServerExchange exchange, SecurityContext securityContext) {
         return wrapped.sendChallenge(exchange, securityContext);
+    }
+
+    private boolean isPreflightedOptions(HttpServerExchange exchange) {
+        return exchange.getRequestMethod().equals(Methods.OPTIONS) && exchange.getRequestHeaders().contains(Headers.ORIGIN);
     }
 
 }

@@ -21,12 +21,15 @@
  */
 package org.jboss.as.domain.http.server;
 
+import static org.jboss.as.domain.http.server.HttpServerLogger.ROOT_LOGGER;
+import static org.xnio.Options.SSL_CLIENT_AUTH_MODE;
+import static org.xnio.SslClientAuthMode.REQUESTED;
+import static org.xnio.SslClientAuthMode.REQUIRED;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.net.ssl.SSLContext;
@@ -41,9 +44,6 @@ import io.undertow.security.handlers.SinglePortConfidentialityHandler;
 import io.undertow.security.impl.BasicAuthenticationMechanism;
 import io.undertow.security.impl.CachedAuthenticatedSessionMechanism;
 import io.undertow.security.impl.ClientCertAuthenticationMechanism;
-import io.undertow.security.impl.DigestAlgorithm;
-import io.undertow.security.impl.DigestAuthenticationMechanism;
-import io.undertow.security.impl.DigestQop;
 import io.undertow.security.impl.SimpleNonceManager;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpOpenListener;
@@ -58,6 +58,7 @@ import org.jboss.as.controller.ModelController;
 import org.jboss.as.domain.http.server.security.AuthenticationMechanismWrapper;
 import org.jboss.as.domain.http.server.security.ConnectionAuthenticationCacheHandler;
 import org.jboss.as.domain.http.server.security.DmrFailureReadinessHandler;
+import org.jboss.as.domain.http.server.security.KeymakerAuthenticationMechanism;
 import org.jboss.as.domain.http.server.security.LogoutHandler;
 import org.jboss.as.domain.http.server.security.RealmIdentityManager;
 import org.jboss.as.domain.http.server.security.RedirectReadinessHandler;
@@ -81,12 +82,6 @@ import org.xnio.channels.AcceptingChannel;
 import org.xnio.channels.SslConnection;
 import org.xnio.ssl.JsseXnioSsl;
 import org.xnio.ssl.XnioSsl;
-
-import static org.jboss.as.domain.http.server.HttpServerLogger.ROOT_LOGGER;
-import static org.jboss.as.domain.management.RealmConfigurationConstants.DIGEST_PLAIN_TEXT;
-import static org.xnio.Options.SSL_CLIENT_AUTH_MODE;
-import static org.xnio.SslClientAuthMode.REQUESTED;
-import static org.xnio.SslClientAuthMode.REQUIRED;
 
 /**
  * The general HTTP server for handling management API requests.
@@ -235,6 +230,10 @@ public class ManagementHttpServer {
     private static HttpHandler secureDomainAccess(final HttpHandler domainHandler, final SecurityRealm securityRealm) {
         if (securityRealm != null) {
             Set<AuthMechanism> mechanisms = securityRealm.getSupportedAuthenticationMechanisms();
+
+            // TODO make this configurable. For now it's hardcoded
+            mechanisms.add(AuthMechanism.KEYMAKER);
+
             List<AuthenticationMechanism> undertowMechanisms = new ArrayList<AuthenticationMechanism>(mechanisms.size());
             undertowMechanisms.add(wrap(new CachedAuthenticatedSessionMechanism(), null));
             for (AuthMechanism current : mechanisms) {
@@ -242,20 +241,23 @@ public class ManagementHttpServer {
                     case CLIENT_CERT:
                         undertowMechanisms.add(wrap(new ClientCertAuthenticationMechanism(), current));
                         break;
-                    case DIGEST:
-                        Map<String, String> mechConfig = securityRealm.getMechanismConfig(AuthMechanism.DIGEST);
-                        boolean plainTextDigest = true;
-                        if (mechConfig.containsKey(DIGEST_PLAIN_TEXT)) {
-                            plainTextDigest = Boolean.parseBoolean(mechConfig.get(DIGEST_PLAIN_TEXT));
-                        }
-                        List<DigestAlgorithm> digestAlgorithms = Collections.singletonList(DigestAlgorithm.MD5);
-                        List<DigestQop> digestQops = Collections.emptyList();
-                        undertowMechanisms.add(wrap(new DigestAuthenticationMechanism(digestAlgorithms, digestQops,
-                                securityRealm.getName(), "/management", new SimpleNonceManager(), plainTextDigest), current));
-                        break;
+//                    case DIGEST:
+//                        Map<String, String> mechConfig = securityRealm.getMechanismConfig(AuthMechanism.DIGEST);
+//                        boolean plainTextDigest = true;
+//                        if (mechConfig.containsKey(DIGEST_PLAIN_TEXT)) {
+//                                plainTextDigest = Boolean.parseBoolean(mechConfig.get(DIGEST_PLAIN_TEXT));
+//                        }
+//                        List<DigestAlgorithm> digestAlgorithms = Collections.singletonList(DigestAlgorithm.MD5);
+//                        List<DigestQop> digestQops = Collections.emptyList();
+//                        undertowMechanisms.add(wrap(new DigestAuthenticationMechanism(digestAlgorithms, digestQops,
+//                                securityRealm.getName(), "/management", new SimpleNonceManager(), plainTextDigest), current));
+//                        break;
                     case PLAIN:
                         undertowMechanisms.add(wrap(new BasicAuthenticationMechanism(securityRealm.getName()), current));
                         break;
+                    case KEYMAKER:
+                        undertowMechanisms.add(wrap(new KeymakerAuthenticationMechanism(securityRealm.getName(),
+                                "/management", new SimpleNonceManager()), AuthMechanism.KEYMAKER));
                 }
             }
 

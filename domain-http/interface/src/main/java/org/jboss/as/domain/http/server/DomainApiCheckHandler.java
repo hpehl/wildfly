@@ -23,8 +23,6 @@ package org.jboss.as.domain.http.server;
 
 import static org.jboss.as.domain.http.server.HttpServerLogger.ROOT_LOGGER;
 
-import java.util.Arrays;
-
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.BlockingHandler;
@@ -32,7 +30,6 @@ import io.undertow.util.HeaderMap;
 import io.undertow.util.Headers;
 import io.undertow.util.HttpString;
 import io.undertow.util.Methods;
-
 import org.jboss.as.controller.ControlledProcessState;
 import org.jboss.as.controller.ControlledProcessStateService;
 import org.jboss.as.controller.ModelController;
@@ -76,7 +73,7 @@ class DomainApiCheckHandler implements HttpHandler {
                 Common.METHOD_NOT_ALLOWED_HANDLER.handleRequest(exchange);
                 return;
             }
-            addOptionsHeader(requestHeaders.getFirst(Headers.ORIGIN), exchange.getResponseHeaders());
+            addCorsHeader(requestHeaders.getFirst(Headers.ORIGIN), exchange.getResponseHeaders());
             exchange.setResponseCode(200);
             return;
         }
@@ -154,10 +151,11 @@ class DomainApiCheckHandler implements HttpHandler {
         return true;
     }
 
-    private void addOptionsHeader(final String origin, final HeaderMap responseHeaders) {
+    private void addCorsHeader(final String origin, final HeaderMap responseHeaders) {
         responseHeaders.add(HttpString.tryFromString("Access-Control-Allow-Origin"), origin);
-        responseHeaders.addAll(HttpString.tryFromString("Access-Control-Allow-Methods"),
-                Arrays.asList(Methods.GET_STRING, Methods.POST_STRING, Methods.OPTIONS_STRING));
+        responseHeaders.add(HttpString.tryFromString("Access-Control-Allow-Methods"), Methods.GET_STRING);
+        responseHeaders.add(HttpString.tryFromString("Access-Control-Allow-Methods"), Methods.POST_STRING);
+        responseHeaders.add(HttpString.tryFromString("Access-Control-Allow-Methods"), Methods.OPTIONS_STRING);
         responseHeaders.add(HttpString.tryFromString("Access-Control-Allow-Headers"), "Authorization");
         responseHeaders.add(HttpString.tryFromString("Access-Control-Allow-Headers"), "WWW-Authenticate");
         responseHeaders.add(HttpString.tryFromString("Access-Control-Allow-Headers"), "Content-Type");
